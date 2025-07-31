@@ -19,27 +19,73 @@ class DataExtractor:
             return ""
 
     def extract_images_from_pdf(self, output_dir="output_images"):
-        """Extracts images and returns an ordered list of their paths."""
+        """
+        Finds all image components on a page, groups nearby components into
+        clusters, and saves a separate screenshot for each cluster.
+        """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        
+
         pdf = fitz.open(self.pdf_path)
         image_paths = []
-        image_count = 0
-
-        for page_num in range(len(pdf)):
-            for img_info in pdf[page_num].get_images(full=True):
-                image_count += 1
-                xref = img_info[0]
-                base_image = pdf.extract_image(xref)
-                image_bytes = base_image["image"]
-                
-                # Use a simple, ordered filename
-                image_filename = os.path.join(output_dir, f"figure_{image_count}.png")
-                
-                with open(image_filename, "wb") as f:
-                    f.write(image_bytes)
-                image_paths.append(image_filename)
+        total_image_count = 0
         
-        print(f"Extracted {len(image_paths)} images.")
+        # A margin to consider images "close" to each other (in pixels)
+        proximity_margin = 20 
+
+        for page_num, page in enumerate(pdf):
+            # Get info for all image components on the page
+            image_info_list = page.get_image_info(xrefs=True)
+            if not image_info_list:
+                continue
+
+            # Get the bounding boxes for all image components
+            rects = [fitz.Rect(info['bbox']) for info in image_info_list]
+            
+            # --- Clustering Logic ---
+            clusters = []
+            visited_indices = set()
+
+            for i, rect1 in enumerate(rects):
+                if i in visited_indices:
+                    continue
+                
+                # Start a new cluster with the current rectangle
+                current_cluster_indices = {i}
+                # Use a queue for breadth-first search to find connected components
+                queue = [i]
+                visited_indices.add(i)
+
+                while queue:
+                    current_idx = queue.pop(0)
+                    current_rect = rects[current_idx]
+                    
+                    # Check against all other rectangles
+                    for j, rect2 in enumerate(rects):
+                        if j not in visited_indices:
+                            # If rect2 is close to current_rect, add it to the cluster
+                            expanded_rect = current_rect + (-proximity_margin, -proximity_margin, proximity_margin, proximity_margin)
+                            if expanded_rect.intersects(rect2):
+                                visited_indices.add(j)
+                                current_cluster_indices.add(j)
+                                queue.append(j)
+                clusters.append([rects[k] for k in current_cluster_indices])
+            
+            # --- Save a screenshot for each identified cluster ---
+            for i, cluster in enumerate(clusters):
+                total_image_count += 1
+                
+                # Calculate the total bounding box for the entire cluster
+                total_bbox = fitz.Rect()
+                for rect in cluster:
+                    total_bbox.include_rect(rect)
+
+                # Take a screenshot of the cluster's bounding box at high resolution
+                pix = page.get_pixmap(clip=total_bbox, dpi=200)
+
+                image_filename = os.path.join(output_dir, f"figure_{total_image_count}.png")
+                pix.save(image_filename)
+                image_paths.append(image_filename)
+
+        print(f"Extracted {len(image_paths)} distinct figures.")
         return image_paths

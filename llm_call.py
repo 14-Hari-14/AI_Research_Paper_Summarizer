@@ -99,7 +99,7 @@ if paper_text:
     # Step 5: Add a title and save the final markdown file
     final_markdown_with_title = f"# Summary of Research Paper\n\n{final_markdown}"
 
-    with open('summary.md', 'w') as f:
+    with open('summary_mod.md', 'w') as f:
         f.write(final_markdown_with_title)
     
     print("\nSuccessfully created summary.md with embedded images.")
