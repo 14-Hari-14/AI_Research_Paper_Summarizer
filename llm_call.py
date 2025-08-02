@@ -5,12 +5,31 @@ from dotenv import load_dotenv
 import os
 import markdown
 import re
+from weasyprint import HTML
+import matplotlib.pyplot as plt
+import hashlib
 
 load_dotenv()  
 
 from langchain_perplexity import ChatPerplexity
 from langchain_core.prompts import ChatPromptTemplate
 
+def create_pdf_from_markdown(markdown_text, output_filename=""):
+    """
+    Convert markdown file to pdf for easy sharing and storage.
+    Args: 
+        markdown_text (str): The markdown content to convert.
+        output_filename (str): The name of the output PDF file.
+    """
+    # CORRECTED: 'extensions' instead of 'extensions'
+    html_text = markdown.markdown(
+        markdown_text, extensions=['markdown.extensions.fenced_code']
+    )
+    
+    # CORRECTED: Added f-string to print the filename
+    print(f"Generating PDF: {output_filename}...")
+    HTML(string=html_text, base_url=os.getcwd()).write_pdf(output_filename)
+    print("PDF generated successfully.")
 
 def insert_images_into_markdown(markdown_content, image_mapping):
     """
@@ -41,7 +60,7 @@ def insert_images_into_markdown(markdown_content, image_mapping):
     figure_line_pattern = re.compile(r"((?:[\*\-]\s*)?\*\*Figure (\d+):\*\*.*)", re.IGNORECASE)
     
     return figure_line_pattern.sub(replacer, markdown_content)
-
+            
 
 # LLM and Prompt setup
 chat = ChatPerplexity(temperature=0, pplx_api_key=os.environ["PPLX_API_KEY"], model="sonar")
@@ -49,17 +68,20 @@ system = (
     "You are a helpful assistant that reads and summarizes academic research papers "
     "in a way that is accessible to a general audience. You extract key sections and explain technical content in simple terms."
 )
-human = """
-Please summarize the following research paper content clearly and concisely. 
-Break the summary into these sections in markdown format:
+human = r"""
+Please summarize the following research paper content in a way that is clear, concise, and easily understood by a non-expert.
 
-1.  **Introduction / Abstract**
-2.  **Methodology**
-3.  **Theory / Mathematics**
-4.  **Key Diagrams or Visual Elements** (Describe each figure starting with '- **Figure X:**' where X is the number)
-5.  **Conclusion**
+**Overall Instructions:**
+- The summary title should be the paper's title, with the date of summarization as a subheading.
+- When a key technical term is introduced (e.g., FPGA, Convolution, Protein Folding), you MUST provide a brief, parenthetical explanation of what it is. Also mark the term in **bold**.
 
-Ensure the summary is easy to understand.
+Please break the summary into these specific sections using markdown:
+
+1.  **Introduction / Abstract**: What is the core problem the paper addresses? What is its proposed solution and main finding?
+2.  **Methodology**: How did the researchers conduct their work? Explain the key steps and techniques in a simple, logical sequence.
+3.  **Theory / Mathematics**: Explain important theoretical concepts. After presenting the formula, then explain what it means and why it's used.
+4.  **Key Diagrams or Visual Elements**: Describe each important figure or table. Start the description with '- **Figure X:**' and explain what the visual shows and its significance.
+5.  **Conclusion**: What are the key results and takeaways? Crucially, end this section with a final sentence that explains the **"Why It Matters"** or the **"real-world impact"** of this research.
 
 Text to summarize:
 {input}
@@ -99,9 +121,17 @@ if paper_text:
     # Step 5: Add a title and save the final markdown file
     final_markdown_with_title = f"# Summary of Research Paper\n\n{final_markdown}"
 
-    with open('summary_mod.md', 'w') as f:
+    with open('summary_new.md', 'w') as f:
         f.write(final_markdown_with_title)
     
     print("\nSuccessfully created summary.md with embedded images.")
 else:
     print("Could not extract text from the PDF. Aborting.")
+
+convert_to_pdf = input("Do you want to convert the markdown summary to PDF? (yes/no): ").strip().lower()
+if convert_to_pdf == 'yes':
+    output_pdf_filename = input("Enter pdf file name (without extension): ").strip() + ".pdf"
+    
+    # 2. Pass the new, PROCESSED variable to the PDF creator
+    create_pdf_from_markdown(final_markdown_with_title, output_pdf_filename)
+    
