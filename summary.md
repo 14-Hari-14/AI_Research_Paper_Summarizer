@@ -1,62 +1,52 @@
-# Summary of Research Paper
-
-**Underwater Image Enhancement Using FPGA-Based Gaussian Filters with Approximation Techniques**  
-*Summary Date: August 2, 2025*
+---
+    title: Summary of Research Paper
+    subtitle: "Summary of Research Paper"
+    author: "AI Summarizer"
+    date: "August 03, 2025"
+    ---
+    
+Underwater Image Restoration Through a Prior Guided Hybrid Sense Approach and Extensive Benchmark Analysis  
+*Summarized on August 3, 2025*
 
 1. **Introduction / Abstract**  
-The paper addresses the problem of poor visual quality in underwater images caused by natural effects like light absorption and scattering, which create haziness and noise. To improve these images, the authors propose an efficient method using a **Gaussian filter** (a mathematical tool for smoothing images and reducing noise) implemented on a **Field-Programmable Gate Array (FPGA)** (a type of reconfigurable hardware device). The key innovation is a pipeline architecture combined with approximate adders (simplified arithmetic units that trade some accuracy for better speed and lower power use). The main findings show that this approach speeds up processing by over 150% and reduces power consumption by more than 34%, though it requires more hardware area. This tradeoff is suitable for error-tolerant applications like image and video processing.
+The paper addresses the problem of underwater images suffering from color distortions (mainly blue or green hues) and blurriness caused by light absorption and scattering in water. These issues degrade image quality and hinder tasks like marine object recognition. The authors propose a novel underwater image restoration (UIR) framework called GuidedHybSensUIR, which combines multi-scale processing with a new Color Balance Prior (a guide based on average RGB channel values) to correct color casts and restore details. Their method integrates convolutional neural networks (**CNNs**, which extract local image features) and Transformers (models that capture long-range dependencies) in a hybrid architecture. They also create a comprehensive benchmark dataset from multiple real-world underwater image datasets and evaluate 37 existing methods, showing that their approach outperforms state-of-the-art techniques overall.
 
 2. **Methodology**  
-The researchers designed a pipeline Gaussian filter architecture on an FPGA platform. The pipeline divides the filtering process into stages that operate simultaneously, increasing speed. They used line buffers and window buffers to efficiently handle image data in real time. To further improve efficiency, they incorporated various types of approximate adders that simplify addition operations by allowing small errors, reducing logic complexity and power use. They tested ten different approximate adder designs, applying approximations to the least significant bits of 16-bit adders. The system was simulated in MATLAB with real underwater images corrupted by Gaussian noise, and then synthesized on an Intel MAX10 FPGA device to measure power, speed, and area.
+The GuidedHybSensUIR framework uses a U-shaped network architecture with three main components:  
+- **Detail Restorer**: A CNN-based module that restores fine, local image details at multiple scales using quaternion convolutions (a mathematical way to represent RGB channels jointly) to better capture color interdependencies. It combines two blocks: Residual Context Block (RCB) for contextual information and Nonlinear Activation-Free Block (NAFB) for efficient feature processing.  
+- **Feature Contextualizer**: A Transformer-based module at the network bottleneck that models global, long-range relationships and color dependencies using three types of inter-channel attention mechanisms—Adjust Color Transformer (ACT), Keep Feature Transformer (KFT), and Self-Attention Transformer (SAT). These attentions focus on refining color and feature information guided by the Color Balance Prior.  
+- **Scale Harmonizer**: A module in the decoder that fuses multi-scale features from the encoder and bottleneck, harmonizing them through learnable scaling and shifting parameters to produce a high-quality restored image.  
+The Color Balance Prior is computed as the average of the RGB channels per pixel, serving as a strong guide during feature contextualization and a weak guide during decoding to steer color correction. The model is trained with a composite loss combining pixel fidelity, structural similarity, and perceptual quality.
 
 3. **Theory / Mathematics**  
-The Gaussian filter is based on the two-dimensional Gaussian function:  
-\[
-f(x,y) = \frac{1}{2\pi\sigma^2} e^{-\frac{x^2 + y^2}{2\sigma^2}}
-\]  
-where \(f(x,y)\) is the filter value at coordinates \((x,y)\), and \(\sigma\) is the standard deviation controlling the spread of the filter. This function smooths images by emphasizing central pixels and reducing the influence of distant pixels, effectively reducing noise. The filter is separable, meaning a 2D filter can be applied as two 1D filters sequentially, improving computational efficiency.
-
-The convolution operation for filtering is expressed as:  
-\[
-h[i,j] = A P_1 + B P_2 + C P_3 + D P_4 + E P_5 + F P_6 + G P_7 + H P_8 + I P_9
-\]  
-where \(P_1\) to \(P_9\) are pixel values in a 3x3 window, and \(A\) to \(I\) are corresponding weights from the Gaussian kernel.
-
-Image quality was quantitatively assessed using:  
-- **Peak Signal-to-Noise Ratio (PSNR):**  
-\[
-PSNR(f,g) = 20 \log_{10} \left(\frac{2^B - 1}{\sqrt{MSE(f,g)}}\right)
-\]  
-where \(B\) is bit depth, and \(MSE\) is Mean Square Error.  
-- **Mean Square Error (MSE):**  
-\[
-MSE(f,g) = \frac{1}{MN} \sum_{i=1}^M \sum_{j=1}^N (f_{ij} - g_{ij})^2
-\]  
-- **Structural Similarity Index (SSIM):** A measure considering luminance, contrast, and structure similarity between images.  
-- **Error Distance (ED), Mean Error Distance (MED), Normalized Error Distance (NED):** Metrics measuring spatial differences between original and processed images.
+The Color Balance Prior is based on the Gray World Assumption, which states that in a normally illuminated scene, the average intensities of the red, green, and blue channels should be equal (neutral gray). Mathematically, the observed pixel intensity in channel i at position (x,y) is:  
+fi(x,y) = G(x,y) * Ri(x,y) * Ii(x,y)  
+where G is a geometry factor, R is the object's reflectance (true color), and I is the illumination. Assuming constant geometry and uniform reflectance distribution, the average intensity ai of each channel is proportional to its illumination Ii. In air, all Ii are equal, so:  
+aR ≈ aG ≈ aB  
+This prior guides the model to restore balanced color intensities, compensating for underwater wavelength-dependent light absorption.  
+Quaternion convolution is used to fuse outputs from parallel CNN blocks mathematically, limiting degrees of freedom and stabilizing feature fusion. The quaternion convolution Qout = Q * W uses Hamilton product rules to combine feature maps, capturing inter-channel interactions effectively.  
+The inter-channel attention in the Transformer modules computes attention maps across feature channels rather than spatial patches, reducing computational complexity from quadratic to linear with respect to spatial size. The attention formula is:  
+InterCAttn(Q,K,V) = Softmax(Q * K^T / τ) * V  
+where Q, K, V are query, key, and value tensors derived from image and prior features, and τ is a learnable temperature parameter.
 
 4. **Key Diagrams or Visual Elements**  
 ![Figure 1](output_images/figure_1.png)
-- **Figure 1:** Shows the delay line buffer structure used to store recent pixel values, minimizing memory access during convolution. This buffer holds the current 3x3 pixel window and two previous rows, enabling efficient filtering.  
+- **Figure 1:** Shows 3D scatter plots of color distributions for an input underwater image, the Color Balance Prior, and the restored output. The prior aligns centrally in the restored image’s color distribution, indicating its effectiveness in guiding color correction.  
 ![Figure 2](output_images/figure_2.png)
-- **Figure 2:** Illustrates the convolution operation applying the 3x3 Gaussian kernel over the image pixels to compute the filtered output.  
+- **Figure 2:** Illustrates the overall GuidedHybSensUIR architecture with encoder (Detail Restorer), bottleneck (Feature Contextualizer), and decoder (Scale Harmonizer) modules, showing multi-scale feature processing and integration.  
 ![Figure 3](output_images/figure_3.png)
-- **Figure 3:** Depicts the weighted Gaussian kernel used in the filter, showing the relative importance of each pixel in the 3x3 window.  
+- **Figure 3:** Details the Nonlinear Activation-Free Block (NAFB) architecture, highlighting its gating and attention mechanisms for selective feature enhancement.  
 ![Figure 4](output_images/figure_4.png)
-- **Figure 4:** Block diagram of the Gaussian filter implementation, highlighting the use of adders and shifters for multiplication and division operations via bit shifts.  
+- **Figure 4:** Depicts the ContextBlock within the Residual Context Block (RCB), showing how contextual information is captured and added to features.  
 ![Figure 5](output_images/figure_5.png)
-- **Figure 5:** Pipeline structure of the Gaussian filter, dividing the computation into four stages to increase throughput.  
+- **Figure 5:** Shows the Feature Contextualizer module with Multi-Attention Quaternion (MAQ) blocks combining three Transformer attentions (ACT, KFT, SAT) fused via quaternion convolution.  
 ![Figure 6](output_images/figure_6.png)
-- **Figure 6:** Diagram of the 16-bit carry ripple adder used in the approximate adder designs, showing how approximation is applied to least significant bits.  
+- **Figure 6:** Compares the attention mechanisms (ACT, KFT, SAT) in terms of their query, key, and value selections, clarifying their distinct roles in feature refinement.  
 ![Figure 7](output_images/figure_7.png)
-- **Figure 7:** Two sample raw underwater images (a flatfish and a diver) with their histograms, used for simulation testing.  
+- **Figure 7:** Details the Adjust Color Transformer (ACT) architecture, explaining how it adjusts image features based on similarity to the Color Balance Prior.  
 ![Figure 8](output_images/figure_8.png)
-- **Figure 8:** Graphs showing image quality metrics (PSNR, SSIM, etc.) for different approximate adder configurations, indicating that up to 5-bit approximation maintains good quality.  
-![Figure 9](output_images/figure_9.png)
-- **Figure 9:** Power-Delay Product (PDP) comparison for different approximate adders, identifying APFA4, APFA5, and APFA6 as most power-efficient and fast.
+- **Figure 8:** Presents the Scale Harmonizer module, which calibrates and fuses multi-scale features using conditioned weighting layers for scaling and shifting feature amplitudes.
 
 5. **Conclusion**  
-The study successfully demonstrates that implementing a pipeline Gaussian filter with approximate adders on FPGA significantly improves processing speed (over 150%) and reduces power consumption (over 34%) for underwater image enhancement. Although this comes with increased hardware area, the tradeoff is justified in error-resilient applications like image and video processing where slight accuracy loss is acceptable. This work advances underwater imaging by providing a practical, hardware-efficient solution to improve image quality in challenging marine environments, enabling better monitoring and analysis of underwater scenes.
-
-**Why It Matters:**  
-Improving underwater image quality is vital for marine research, environmental monitoring, and underwater robotics. This research offers a fast, low-power hardware method to enhance images in real time, facilitating more effective exploration and management of underwater ecosystems.
+The paper presents a novel underwater image restoration framework that effectively combines CNNs and Transformers guided by a Color Balance Prior to correct color distortions and restore fine details. The hybrid multi-scale architecture and quaternion-based fusion enable stable and comprehensive feature processing. Extensive experiments on a newly compiled benchmark dataset demonstrate that this method outperforms 37 state-of-the-art approaches in both quantitative metrics (PSNR, SSIM, LPIPS) and qualitative visual quality across diverse underwater datasets. The Color Balance Prior plays a crucial role in steering the model towards realistic color restoration.  
+**Why It Matters:** This research advances underwater imaging by providing a robust, generalizable restoration method that improves the clarity and color accuracy of underwater photos, facilitating better marine exploration, environmental monitoring, and underwater robotics applications.
