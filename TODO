@@ -5,8 +5,8 @@ TODO list for Smart Academic Paper Summarizer
 - Created a prototype which can extract text and send it to llm and recieve response
 - Extract images from the research paper
 - Select how to display output(streamlit, markdown, terminal) going with streamlit
+- Extract the math functions
 
 ## Todo
 
 - Extract tables from the research paper and display in the key visuals/ data point sections
-  -Extract the math functions using matplotlib

@@ -9,6 +9,7 @@ import re
 # from markdown_pdf import MarkdownPdf, Section
 import pypandoc
 from datetime import datetime
+import subprocess
 
 
 load_dotenv()  
@@ -17,29 +18,38 @@ from langchain_perplexity import ChatPerplexity
 from langchain_core.prompts import ChatPromptTemplate
 
 
-def create_pdf_from_markdown(markdown_file, output_pdf):
-    """
-    Convert markdown content to PDF for easy sharing and storage.
-    Args:
-        markdown_text (_type_): The markdown content to convert.
-        output_pdf (_type_): The oath of the output PDF file.
-    """
-    try:
-        # Pandoc arguments to handle LaTeX math and metadata
-        extra_args = [
-            '--pdf-engine=pdflatex', # A common LaTeX engine
-            '--variable', 'geometry:margin=1in', # Set page margins
-        ]
-        pypandoc.convert_file(
-            markdown_file,
-            'pdf',
-            outputfile=output_pdf,
-            extra_args=extra_args
-        )
-        print("PDF generated successfully.")
-    except Exception as e:
-        print(f"Error during PDF generation with Pandoc: {e}")
-        #print("Please ensure Pandoc and a LaTeX distribution (like MiKTeX, TeX Live, or MacTeX) are installed and in your system's PATH.")
+def md_to_pdf(input_md, output_pdf):
+    subprocess.run([
+        "pandoc",
+        input_md,
+        "-o", output_pdf,
+        "--pdf-engine=xelatex",
+        "--mathjax"
+    ], check = True)
+
+# def create_pdf_from_markdown(markdown_file, output_pdf):
+#     """
+#     Convert markdown content to PDF for easy sharing and storage.
+#     Args:
+#         markdown_text (_type_): The markdown content to convert.
+#         output_pdf (_type_): The oath of the output PDF file.
+#     """
+#     try:
+#         # Pandoc arguments to handle LaTeX math and metadata
+#         extra_args = [
+#             '--pdf-engine=pdflatex', # A common LaTeX engine
+#             '--variable', 'geometry:margin=1in', # Set page margins
+#         ]
+#         pypandoc.convert_file(
+#             markdown_file,
+#             'pdf',
+#             outputfile=output_pdf,
+#             extra_args=extra_args
+#         )
+#         print("PDF generated successfully.")
+#     except Exception as e:
+#         print(f"Error during PDF generation with Pandoc: {e}")
+#         #print("Please ensure Pandoc and a LaTeX distribution (like MiKTeX, TeX Live, or MacTeX) are installed and in your system's PATH.")
 
     
 def insert_images_into_markdown(markdown_content, image_mapping):
@@ -76,8 +86,7 @@ def insert_images_into_markdown(markdown_content, image_mapping):
 # LLM and Prompt setup
 chat = ChatPerplexity(temperature=0, pplx_api_key=os.environ["PPLX_API_KEY"], model="sonar")
 system = (
-    "You are a helpful assistant that reads and summarizes academic research papers "
-    "in a way that is accessible to a general audience. You extract key sections and explain technical content in simple terms."
+    "You are an expert science communicator. Your task is to read the provided academic research paper and summarize it in a way that is clear, engaging, and easily understood by a non-expert with a high-school level of education."
 )
 human = r"""
 Please summarize the following research paper content in a way that is clear, concise, and easily understood by a non-expert.
@@ -90,9 +99,9 @@ Please break the summary into these specific sections using markdown:
 
 1.  **Introduction / Abstract**: What is the core problem the paper addresses? What is its proposed solution and main finding?
 2.  **Methodology**: How did the researchers conduct their work? Explain the key steps and techniques in a simple, logical sequence.
-3.  **Theory / Mathematics**: Explain important theoretical concepts. After presenting the formula, then explain what it means and why it's used.
+3.  **Theory / Mathematics**: Explain important theoretical concepts. After presenting the formula, then explain what it means and why it's used. Whatever equation or formula is presented, it should be wrapped in the correct latex math wrappers like $...$ or $$...$$ or square brackets.
 4.  **Key Diagrams or Visual Elements**: Describe each important figure or table. Start the description with '- **Figure X:**' and explain what the visual shows and its significance.
-5.  **Conclusion**: What are the key results and takeaways? Crucially, end this section with a final sentence that explains the **"Why It Matters"** or the **"real-world impact"** of this research.
+5.  **Conclusion**: What are the key results and takeaways? Crucially, end this section with a final sentence that explains the **"Why It Matters"** or the **"real-world impact"** of this research. If there are any figures that display the results, mention them here as well.
 
 Text to summarize:
 {input}
@@ -103,8 +112,8 @@ chain = prompt | chat
 # --- Workflow ---
 
 # Step 1: Extract data from PDF
-# pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/Underwater Image Enhancement Using FPGA-Based Gaussian Filters.pdf"
-pdf_path = "/home/hari/Downloads/2501.02701v1.pdf"
+pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/Underwater Image Enhancement Using FPGA-Based Gaussian Filters.pdf"
+#pdf_path = "/home/hari/Downloads/2501.02701v1.pdf"
 extractor = DataExtractor(pdf_path)
 
 paper_text = extractor.extract_text_from_pdf()
@@ -128,21 +137,11 @@ if paper_text:
     paper_title = "Summary of Research Paper" # You can extract the title more dynamically if needed
     summary_date = datetime.now().strftime("%B %d, %Y")
     
-    # Create YAML metadata block for Pandoc to create a proper title
-    yaml_header = f"""---
-    title: {paper_title}
-    subtitle: "{paper_title}"
-    author: "AI Summarizer"
-    date: "{summary_date}"
-    ---
-    """
-    
-    final_markdown_with_header = f"{yaml_header}\n{final_markdown}"
     
     # Define the markdown filename
-    markdown_filename = 'summary.md'
+    markdown_filename = 'summary_mod.md'
     with open(markdown_filename, 'w', encoding='utf-8') as f:
-        f.write(final_markdown_with_header)
+        f.write(final_markdown)
     
     print(f"\nSuccessfully created {markdown_filename} with embedded images and metadata.")
 
@@ -152,7 +151,7 @@ if paper_text:
         output_pdf_filename = input("Enter pdf file name (without extension): ").strip() + ".pdf"
         
         # Call the new, robust Pandoc function
-        create_pdf_from_markdown(markdown_filename, output_pdf_filename)
+        md_to_pdf(markdown_filename, output_pdf_filename)
 
 else:
     print("Could not extract text from the PDF. Aborting.")

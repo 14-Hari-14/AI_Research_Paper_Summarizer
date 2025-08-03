@@ -31,7 +31,7 @@ class DataExtractor:
         total_image_count = 0
         
         # A margin to consider images "close" to each other (in pixels)
-        proximity_margin = 20 
+        proximity_margin = 40 
 
         for page_num, page in enumerate(pdf):
             # Get info for all image components on the page
