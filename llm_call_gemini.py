@@ -77,9 +77,9 @@ prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)]
 chain = prompt | chat
 
 # --- Workflow ---
-#pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/Underwater Image Enhancement Using FPGA-Based Gaussian Filters.pdf"
+pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/research_papers/Underwater Image Enhancement Using FPGA-Based Gaussian Filters.pdf"
 #pdf_path = "/home/hari/Downloads/2501.02701v1.pdf"
-pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/Low pass filter.pdf"
+#pdf_path = "/home/hari/computer_science/ai_projects/AI_Paper_Summarizer/research_papers/Low pass filter.pdf"
 extractor = DataExtractor(pdf_path)
 
 paper_text = extractor.extract_text_from_pdf()
