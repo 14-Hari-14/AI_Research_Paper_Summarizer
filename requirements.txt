@@ -1,0 +1,12 @@
+# Backend
+fastapi
+uvicorn[standard]
+langchain
+langchain-google-genai
+pypdf
+faiss-cpu
+python-dotenv
+
+# Frontend
+streamlit
+requests
