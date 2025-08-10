@@ -1,4 +1,3 @@
-from PyPDF2 import PdfReader as pfr
 import fitz  
 import os
 
@@ -8,20 +7,20 @@ class DataExtractor:
 
     def extract_text_from_pdf(self):
         """Extracts all text from the PDF."""
+        text = ""
         try:
-            reader = pfr(self.pdf_path)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
+            with fitz.open(self.pdf_path) as doc:
+                for page in doc:
+                    text += page.get_text() + "\n"
             return text
         except Exception as e:
-            print(f"Error reading PDF with PyPDF2: {e}")
+            print(f"Error reading PDF with fitz: {e}")
             return ""
 
     def extract_images_from_pdf(self, output_dir="output_images"):
         """
         Finds all image components on a page, groups nearby components into
-        clusters, and saves a separate screenshot for each cluster.
+        clusters.
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
