@@ -3,14 +3,16 @@ import fitz  # PyMuPDF
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-from typing import List, Optional
+
+
+from .image_utils import extract_and_cluster_images
+from .llm_utils import get_llm, get_embeddings
+from .models import QueryRequest, SummarizeRequest
+
 
 from langchain_community.document_loaders import PyPDFLoader
-# ... (other langchain imports remain the same)
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
@@ -19,7 +21,7 @@ load_dotenv()
 
 app = FastAPI(title="AI Research Paper Summarizer API")
 
-# Define and create directories
+
 UPLOAD_DIR = Path("uploads")
 VECTOR_STORE_DIR = Path("backend/vector_stores")
 STATIC_DIR = Path("backend/static")
@@ -29,81 +31,6 @@ STATIC_DIR.mkdir(exist_ok=True)
 
 # Mount the static directory to serve images
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-# Pydantic Models and Helper functions (get_llm, get_embeddings) remain the same...
-class QueryRequest(BaseModel):
-    file_name: str
-    query: str
-
-class SummarizeRequest(BaseModel):
-    file_name: str
-    section_prompt: str
-    image_filenames: Optional[List[str]] = Field(default=None)
-
-def get_llm(api_key: str):
-    return ChatGoogleGenerativeAI(model="gemini-2.5-pro", google_api_key=api_key, temperature=0.3)
-
-def get_embeddings(api_key: str):
-    return GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
-
-
-# --- NEW: Your sophisticated image extraction function, adapted as a helper ---
-def extract_and_cluster_images(pdf_path: str, output_dir: Path) -> List[str]:
-    """
-    Finds image components, groups them into clusters, and saves a single
-    high-resolution screenshot for each cluster.
-    """
-    output_dir.mkdir(exist_ok=True)
-    pdf = fitz.open(pdf_path)
-    final_image_names = []
-    total_image_count = 0
-    proximity_margin = 40  # Margin to consider images "close"
-
-    for page in pdf:
-        image_info_list = page.get_image_info(xrefs=True)
-        if not image_info_list:
-            continue
-
-        rects = [fitz.Rect(info['bbox']) for info in image_info_list]
-        
-        # Clustering Logic
-        clusters = []
-        visited_indices = set()
-        for i, rect1 in enumerate(rects):
-            if i in visited_indices:
-                continue
-            
-            current_cluster_indices = {i}
-            queue = [i]
-            visited_indices.add(i)
-
-            while queue:
-                current_idx = queue.pop(0)
-                current_rect = rects[current_idx]
-                
-                for j, rect2 in enumerate(rects):
-                    if j not in visited_indices:
-                        expanded_rect = current_rect + (-proximity_margin, -proximity_margin, proximity_margin, proximity_margin)
-                        if expanded_rect.intersects(rect2):
-                            visited_indices.add(j)
-                            current_cluster_indices.add(j)
-                            queue.append(j)
-            clusters.append([rects[k] for k in current_cluster_indices])
-        
-        # Save a screenshot for each cluster
-        for cluster in clusters:
-            total_image_count += 1
-            total_bbox = fitz.Rect()
-            for rect in cluster:
-                total_bbox.include_rect(rect)
-
-            pix = page.get_pixmap(clip=total_bbox, dpi=200)
-            image_filename = f"figure_{total_image_count}.png"
-            pix.save(output_dir / image_filename)
-            final_image_names.append(image_filename)
-
-    pdf.close()
-    return final_image_names
 
 
 # --- API Endpoints ---
@@ -121,7 +48,6 @@ async def upload_and_process(api_key: str, file: UploadFile = File(...)):
         buffer.write(await file.read())
 
     try:
-        # --- CHANGED: Call your new clustering function ---
         image_filenames = extract_and_cluster_images(
             pdf_path=str(file_path),
             output_dir=image_output_dir
@@ -131,7 +57,7 @@ async def upload_and_process(api_key: str, file: UploadFile = File(...)):
         if not vector_store_path.exists():
             loader = PyPDFLoader(str(file_path))
             documents = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1200, chunk_overlap=200)
             texts = text_splitter.split_documents(documents)
             embeddings = get_embeddings(api_key)
             vector_store = FAISS.from_documents(texts, embeddings)

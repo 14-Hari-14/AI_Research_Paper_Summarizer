@@ -27,7 +27,7 @@ def render_summary_with_images(summary_markdown, file_name, base_url):
             image_url = f"{base_url}/static/{file_name_stem}/{image_filename}"
             # Display the image
             #st.write(f"Attempting to load image from: {image_url}") 
-            st.image(image_url, use_container_width=True, caption=image_filename)
+            st.image(image_url, use_column_width=True, caption=image_filename)
         # Even-indexed parts are the text in between
         else:
             if part.strip():
