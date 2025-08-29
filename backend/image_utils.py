@@ -6,6 +6,8 @@ def extract_and_cluster_images(pdf_path: str, output_dir: Path) -> List[str]:
     """
     Finds image components, groups them into clusters, and saves a single
     high-resolution screenshot for each cluster.
+    
+    Output: Returns a list of names of the final saved images.
     """
     output_dir.mkdir(exist_ok=True)
     pdf = fitz.open(pdf_path)

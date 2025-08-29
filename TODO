@@ -7,6 +7,12 @@ TODO list for Smart Academic Paper Summarizer
 - Select how to display output(streamlit, markdown, terminal) going with streamlit
 - Extract the math functions
 
-## Todo
+## Somewhat done
 
 - Extract tables from the research paper and display in the key visuals/ data point sections
+
+## Todo
+
+- fix the rate limiting issue
+- reduce the amount of time taken to generate summary
+- show download pdf option in streamlit

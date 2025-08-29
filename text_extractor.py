@@ -6,7 +6,8 @@ class DataExtractor:
         self.pdf_path = pdf_path
 
     def extract_text_from_pdf(self):
-        """Extracts all text from the PDF."""
+        """Extracting text from PDF to create embeddings and store them in a vector database."""
+        
         text = ""
         try:
             with fitz.open(self.pdf_path) as doc:
