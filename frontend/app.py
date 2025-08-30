@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from pathlib import Path
 import re
+import zipfile
+import io
 
 # --- Configuration ---
 st.set_page_config(layout="wide", page_title="AI Research Paper Assistant")
@@ -14,25 +16,39 @@ st.title("AI Research Paper Assistant 📄")
 
 def render_summary_with_images(summary_markdown, file_name, base_url):
     file_name_stem = Path(file_name).stem
-    # This regex now correctly finds the (see: figure_1.png) pattern
-    image_pattern = re.compile(r'\(see:\s*([a-zA-Z0-9_]+\.(?:png|jpg|jpeg|gif))\)')
-    
-    # Split the text by the image references
-    parts = image_pattern.split(summary_markdown)
-    
-    for i, part in enumerate(parts):
-        # Odd-indexed parts are the captured image filenames
-        if i % 2 == 1:
-            image_filename = part.strip()
-            image_url = f"{base_url}/static/{file_name_stem}/{image_filename}"
-            # Display the image
-            #st.write(f"Attempting to load image from: {image_url}") 
-            st.image(image_url, use_column_width=True, caption=image_filename)
-        # Even-indexed parts are the text in between
-        else:
-            if part.strip():
-                st.markdown(part, unsafe_allow_html=True)
-                
+    image_pattern = re.compile(r'!\[\]\(([^)]+)\)')
+    last_idx = 0
+    for match in image_pattern.finditer(summary_markdown):
+        st.markdown(summary_markdown[last_idx:match.start()], unsafe_allow_html=True)
+        image_filename = match.group(1).strip()
+        image_url = f"{base_url}/static/{file_name_stem}/{image_filename}"
+        try:
+            response = requests.get(image_url)
+            if response.status_code == 200:
+                st.image(image_url, use_column_width=True, caption=image_filename)
+            else:
+                st.warning(f"Image not found: {image_filename}")
+        except requests.exceptions.RequestException as e:
+            st.warning(f"Failed to load image {image_filename}: {e}")
+        last_idx = match.end()
+    if last_idx < len(summary_markdown):
+        st.markdown(summary_markdown[last_idx:], unsafe_allow_html=True)
+
+def create_markdown_zip(summary_markdown, file_name, image_filenames, backend_url):
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+        zip_file.writestr(f"{Path(file_name).stem}_summary.md", summary_markdown)
+        file_name_stem = Path(file_name).stem
+        for img in image_filenames:
+            img_url = f"{backend_url}/static/{file_name_stem}/{img}"
+            try:
+                img_data = requests.get(img_url).content
+                zip_file.writestr(img, img_data)
+            except Exception as e:
+                st.warning(f"Failed to include image {img} in ZIP: {e}")
+    zip_buffer.seek(0)
+    return zip_buffer
+
 # Sidebar for API key and file upload
 with st.sidebar:
     st.header("Configuration")
@@ -83,23 +99,27 @@ else:
                 title = st.session_state.get('paper_title', "Research Paper Summary")
                 date_str = datetime.now().strftime("%B %d, %Y")
                 summary_parts.append(f"# {title}\n*Summary Date: {date_str}*")
+                markdown_url = ""
+                pdf_url = ""
 
                 for section_name, section_prompt in sections.items():
                     st.write(f"-> Generating section: {section_name}...")
                     
-                    payload = {"file_name": file_name, "section_prompt": section_prompt}
-                    if section_name == "Key Diagrams or Visual Elements":
-                        payload["image_filenames"] = st.session_state.get('image_filenames', [])
-
+                    payload = {
+                        "file_name": file_name,
+                        "section_prompt": section_prompt,
+                        "image_filenames": st.session_state.get('image_filenames', []) if section_name == "Key Diagrams or Visual Elements" else []
+                    }
                     params = {"api_key": user_api_key}
                     try:
                         response = requests.post(f"{BACKEND_URL}/summarize/", json=payload, params=params)
                         if response.status_code == 200:
-                            summary_text = response.json()['summary']
+                            result = response.json()
+                            summary_text = result['summary']
+                            if section_name == "Key Diagrams or Visual Elements":
+                                markdown_url = result.get('markdown_url', '')
+                                pdf_url = result.get('pdf_url', '')
                             
-                            # --- FIX FOR REPEATING HEADINGS ---
-                            # Clean the AI's response if it repeats the heading
-                            # This removes the first line if it's identical to the section name
                             lines = summary_text.strip().splitlines()
                             if lines and lines[0].strip('# ').strip().lower() == section_name.lower():
                                 summary_text = '\n'.join(lines[1:]).strip()
@@ -108,26 +128,52 @@ else:
                         else:
                             summary_parts.append(f"### {section_name}\n\n*Error: {response.json().get('detail')}*")
                     except requests.exceptions.RequestException as e:
-                         summary_parts.append(f"### {section_name}\n\n*Error: {e}*")
+                        summary_parts.append(f"### {section_name}\n\n*Error: {e}*")
 
                 st.session_state.final_summary = "\n\n".join(summary_parts)
+                st.session_state.markdown_url = markdown_url
+                st.session_state.pdf_url = pdf_url
             
         if 'final_summary' in st.session_state and st.session_state.final_summary:
             st.markdown("---")
             st.markdown("### Summary Preview")
-            # Use the corrected rendering function
             render_summary_with_images(st.session_state.final_summary, file_name, BACKEND_URL)
             
-            st.download_button(
-                label="Download Summary as Markdown",
-                data=st.session_state.final_summary,
-                file_name=f"{Path(file_name).stem}_summary.md",
-                mime="text/markdown",
-            )
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.session_state.get('markdown_url'):
+                    st.download_button(
+                        label="Download Summary as Markdown",
+                        data=requests.get(f"{BACKEND_URL}{st.session_state.markdown_url}").content,
+                        file_name=f"{Path(file_name).stem}_summary.md",
+                        mime="text/markdown",
+                    )
+                else:
+                    st.warning("Markdown download unavailable")
+            
+            with col2:
+                if st.session_state.get('pdf_url'):
+                    st.download_button(
+                        label="Download Summary as PDF",
+                        data=requests.get(f"{BACKEND_URL}{st.session_state.pdf_url}").content,
+                        file_name=f"{Path(file_name).stem}_summary.pdf",
+                        mime="application/pdf",
+                    )
+                else:
+                    st.warning("PDF download unavailable")
+            
+            with col3:
+                if st.session_state.get('image_filenames'):
+                    st.download_button(
+                        label="Download Markdown Summary as ZIP (with images)",
+                        data=create_markdown_zip(st.session_state.final_summary, file_name, st.session_state.image_filenames, BACKEND_URL),
+                        file_name=f"{Path(file_name).stem}_summary.zip",
+                        mime="application/zip",
+                    )
+                else:
+                    st.warning("ZIP download unavailable (no images)")
 
-    # --- Chat with Document Tab (Unchanged) ---
     with chat_tab:
-        # This section remains the same as before
         st.header("Interactive Chat")
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -152,4 +198,3 @@ else:
                         st.session_state.messages.append({"role": "assistant", "content": answer})
                     except requests.exceptions.RequestException as e:
                         st.error(f"Connection to backend failed: {e}")
-                st.session_state.messages.append({"role": "assistant", "content": answer})
